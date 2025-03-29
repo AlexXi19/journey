@@ -10,6 +10,7 @@ struct ValueInner {
     grad: f64,
     children: Vec<ValueRef>,
     backward: Option<Box<dyn Fn() -> () + 'static>>,
+    label: Option<String>,
 }
 
 pub struct Value(ValueRef);
@@ -17,6 +18,14 @@ pub struct Value(ValueRef);
 impl Value {
     pub fn new(data: f64) -> Self {
         Self(ValueInner::new(data))
+    }
+
+    pub fn new_with_label(data: f64, label: String) -> Self {
+        let inner = ValueInner::new(data);
+        let mut inner_mut = inner.borrow_mut();
+        inner_mut.label = Some(label);
+        drop(inner_mut);
+        Self(inner)
     }
 
     // Getters and setters
@@ -49,6 +58,10 @@ impl Value {
             .collect()
     }
 
+    pub fn label(&self) -> Option<String> {
+        self.0.borrow().label.clone()
+    }
+
     // Utils
     pub fn topological_sort(&self) -> Vec<Self> {
         let mut topo: Vec<Self> = Vec::new();
@@ -71,6 +84,7 @@ impl Value {
 
         visit(self, &mut visited, &mut topo);
         topo.reverse();
+
         topo
     }
 
@@ -92,12 +106,13 @@ impl Value {
 
     pub fn pow(&self, n: f64) -> Self {
         let result = self.0.borrow().data.powf(n);
-        let ret = Self(ValueInner::new(result));
+        let ret = Self(ValueInner::new_with_children(result, vec![self.0.clone()]));
         let self_clone = self.clone();
+        let ret_clone = ret.clone();
 
         ret.set_backward(Box::new(move || {
             // dL / dx = dL / dy * dy / dx = dL / dy * n * x^(n-1)
-            let grad = n * self_clone.data().powf(n - 1.0) * self_clone.grad();
+            let grad = n * self_clone.data().powf(n - 1.0) * ret_clone.grad();
             self_clone.set_grad(grad);
         }));
 
@@ -108,8 +123,6 @@ impl Value {
     fn _backward(&self) {
         if let Some(backward) = &self.0.borrow().backward {
             backward();
-        } else {
-            // Reached the end
         }
     }
 
@@ -133,6 +146,7 @@ impl ValueInner {
             grad,
             children,
             backward: None,
+            label: None,
         }))
     }
 
@@ -143,6 +157,7 @@ impl ValueInner {
             grad,
             children,
             backward: None,
+            label: None,
         }))
     }
 }
@@ -158,10 +173,12 @@ impl Add for Value {
             result,
             vec![self.0.clone(), other.0.clone()],
         ));
+        let ret_clone = ret.clone();
 
         ret.set_backward(Box::new(move || {
-            let c1grad = c1.grad() + 1.0;
-            let c2grad = c2.grad() + 1.0;
+            // For addition, dy/dx = 1, so we just pass the gradient straight through
+            let c1grad = c1.grad() + ret_clone.grad();
+            let c2grad = c2.grad() + ret_clone.grad();
 
             c1.set_grad(c1grad);
             c2.set_grad(c2grad);
@@ -189,10 +206,11 @@ impl Sub for Value {
             result,
             vec![self.0.clone(), other.0.clone()],
         ));
+        let ret_clone = ret.clone();
 
         ret.set_backward(Box::new(move || {
-            let c1grad = c1.grad() + 1.0;
-            let c2grad = c2.grad() - 1.0;
+            let c1grad = c1.grad() + ret_clone.grad();
+            let c2grad = c2.grad() - ret_clone.grad();
 
             c1.set_grad(c1grad);
             c2.set_grad(c2grad);
@@ -264,7 +282,12 @@ impl std::fmt::Display for Value {
                 self.0.borrow().children
             )
         } else {
-            write!(f, "{}", self.data())
+            write!(
+                f,
+                "{}: {}",
+                self.label().unwrap_or("Unknown".to_string()),
+                self.data()
+            )
         }
     }
 }

@@ -61,4 +61,17 @@ mod tests {
         let expected_grad = 1.0 - b.data() * b.data();
         assert_eq!(a.grad(), expected_grad);
     }
+
+    #[test]
+    fn test_simple_grad_pow() {
+        let a = Value::new(2.0);
+        let n = 3.0;
+        let b = a.clone().pow(n);
+
+        b.backward();
+
+        // For x^n, the derivative is n * x^(n-1)
+        let expected_grad = n * a.data().powf(n - 1.0);
+        assert_eq!(a.grad(), expected_grad);
+    }
 }
