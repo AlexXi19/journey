@@ -45,7 +45,7 @@ mod tests {
         let w1 = Value::new_with_label(0.0, "w1".to_string());
         let b = Value::new_with_label(0.0, "b".to_string());
 
-        let learning_rate = 0.0005;
+        let learning_rate = 0.00000001;
 
         for _ in 0..100000 {
             let n1 = x1.clone() * w1.clone() + b.clone();
@@ -63,17 +63,19 @@ mod tests {
             let w1_update = w1.data() - learning_rate * w1.grad();
             let b_update = b.data() - learning_rate * b.grad();
 
-            w1.set_data(w1_update);
-            b.set_data(b_update);
+            println!("loss: {}, w1: {}, b: {}", loss.data(), w1.data(), b.data());
 
             if loss.data() < 0.001 {
                 break;
             }
+
+            w1.set_data(w1_update);
+            b.set_data(b_update);
         }
 
         // assert with margin of error, let's be generous here
-        assert!((w1.data() - 2.0).abs() < 0.3);
-        assert!((b.data() - 1.0).abs() < 0.3);
+        assert!((w1.data() - 2.0).abs() < 0.1);
+        assert!((b.data() - 1.0).abs() < 0.1);
 
         println!("Expected w1: 2.0, got: {}", w1.data());
         println!("Expected b: 1.0, got: {}", b.data());
